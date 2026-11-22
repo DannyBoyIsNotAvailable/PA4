@@ -25,7 +25,7 @@ typedef struct {
     FILE *fp; // use to write out
     uint8_t *receivedSeq; // receivedSeq[seq] == 1 means we received this seq
     uint32_t numReceived; // have received how many diff chunk
-    int complete; // collect all chunk or not
+    int complete; // all chunks received and the file checksum matches
 } rfile_t;
 
 
@@ -58,6 +58,41 @@ static long long now_ms(void)
     return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
+
+// Read the rebuilt file from the beginning and compare the checksums.
+static int verify_file(rfile_t *f) {
+    uint8_t block[65536];
+    size_t n;
+    uint32_t checksum = CHECKSUM_INIT;
+
+    if (fflush(f->fp) != 0 || fseek(f->fp, 0, SEEK_SET) != 0) {
+        perror(f->name);
+        return 0;
+    }
+
+    while ((n = fread(block, 1, sizeof(block), f->fp)) > 0) {
+        checksum = checksum_update(checksum, block, (uint32_t)n);
+    }
+    if (ferror(f->fp)) {
+        perror(f->name);
+        return 0;
+    }
+
+    int matches = checksum == f->file_checksum;
+    printf("Verify %s: original checksum %08x, received checksum %08x -> %s\n",
+           f->name, f->file_checksum, checksum, matches ? "OK" : "MISMATCH");
+    return matches;
+}
+
+static void finish_file(rfile_t *f, uint16_t id) {
+    if (!verify_file(f)) {
+        fprintf(stderr, "File verification failed for %s\n", f->name);
+        exit(EXIT_FAILURE);
+    }
+
+    f->complete = 1;
+    printf("file %u complete: %s (%u chunks)\n", id, f->name, f->total_chunks);
+}
 
 // handle an ANNOUNCE packet: remember the file and create the output file
 static void handle_announce(const pkt_announce_t *a, int n) {
@@ -105,29 +140,15 @@ static void handle_announce(const pkt_announce_t *a, int n) {
     }
 
     f->numReceived = 0;
-    f->complete = (f->total_chunks == 0); // an empty file is complete at beginning
     f->hasAnnounce = 1;
     last_new_ms = now_ms(); 
 
     printf("file %u/%u announced: %s, %u bytes, %u chunks of %u bytes\n",
            id, total, f->name, f->size, f->total_chunks, f->chunk_size);
 
-}
-
-// Read the rebuilt file back from disk, compute its checksum and
-// compare it with the one the sender announced.
-static void verify_file(rfile_t *f) {
-    uint8_t  block[65536];
-    size_t   n;
-    uint32_t c = CHECKSUM_INIT;
-
-    rewind(f->fp);     // read from the start
-    while ((n = fread(block, 1, sizeof(block), f->fp)) > 0) {
-        c = checksum_update(c, block, (uint32_t)n);
+    if (f->total_chunks == 0) {
+        finish_file(f, id);
     }
-
-    printf("Verify %s: original checksum %08x, received checksum %08x -> %s\n",
-           f->name, f->file_checksum, c, c == f->file_checksum ? "OK" : "MISMATCH");
 }
 
 // handle a data packet, write the chunk to its place in file f->fp
@@ -210,12 +231,8 @@ static void handle_data(const pkt_data_t *d, int n) {
     stat_data++;
     last_new_ms = now_ms();
 
-    if (f->numReceived == f->total_chunks) { // have received all the chunks
-        f->complete = 1;
-        fflush(f->fp); // ensure everything on disk
-        printf("file %u complete: %s (%u chunks)\n",
-               id, f->name, f->total_chunks);
-        verify_file(f); 
+    if (f->numReceived == f->total_chunks) {
+        finish_file(f, id);
     }
 
 }
@@ -360,8 +377,14 @@ int main(int argc, char *argv[]) {
     printf("Recovery: %lu dropped on purpose, %lu recovered by retransmission, %lu NACKs sent\n",
            stat_dropped, stat_recovered, stat_nacks);
 
-    long long elapsed = now_ms() - first_ms;
-    printf("Time: %lld ms from first chunk to all files verified, throughput %.0f packets/s\n", elapsed, stat_data * 1000.0 / elapsed);
+    if (stat_data > 0) {
+        long long elapsed = now_ms() - first_ms;
+        printf("Time: %lld ms from first chunk to all files verified", elapsed);
+        if (elapsed > 0) {
+            printf(", throughput %.0f packets/s", stat_data * 1000.0 / elapsed);
+        }
+        putchar('\n');
+    }
 
     for (int i = 0; i < numFiles; i++) {
         fclose(files[i].fp);
