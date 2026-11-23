@@ -1,0 +1,191 @@
+{
+  "format": "gini-project",
+  "version": 1,
+  "topology": {
+    "name": "Experiment-01",
+    "manual_addressing": false,
+    "routing_mode": "static",
+    "devices": [
+      {
+        "id": "router-1",
+        "type_key": "router",
+        "name": "R",
+        "x": 165.0,
+        "y": -12.0,
+        "parent_id": null,
+        "properties": {
+          "Name": "R",
+          "Forwarding": "true"
+        },
+        "static_ips": {},
+        "size": 1,
+        "w": 0.0,
+        "h": 0.0,
+        "slot": "",
+        "slot_source": ""
+      },
+      {
+        "id": "switch-2",
+        "type_key": "switch",
+        "name": "LAN 1",
+        "x": -29.0,
+        "y": -10.0,
+        "parent_id": null,
+        "properties": {
+          "Name": "LAN 1",
+          "Priority": "100",
+          "MAC": ""
+        },
+        "static_ips": {},
+        "size": 1,
+        "w": 0.0,
+        "h": 0.0,
+        "slot": "",
+        "slot_source": ""
+      },
+      {
+        "id": "switch-3",
+        "type_key": "switch",
+        "name": "LAN 2",
+        "x": 401.0,
+        "y": -10.0,
+        "parent_id": null,
+        "properties": {
+          "Name": "LAN 2",
+          "Priority": "100",
+          "MAC": ""
+        },
+        "static_ips": {},
+        "size": 1,
+        "w": 0.0,
+        "h": 0.0,
+        "slot": "",
+        "slot_source": ""
+      },
+      {
+        "id": "host-4",
+        "type_key": "host",
+        "name": "M1",
+        "x": 600.0,
+        "y": -165.0,
+        "parent_id": null,
+        "properties": {
+          "Name": "M1",
+          "OS": "linux",
+          "Interfaces": "1",
+          "Toolkit": "lean"
+        },
+        "static_ips": {},
+        "size": 1,
+        "w": 0.0,
+        "h": 0.0,
+        "slot": "",
+        "slot_source": ""
+      },
+      {
+        "id": "host-5",
+        "type_key": "host",
+        "name": "M2",
+        "x": 606.0,
+        "y": -13.0,
+        "parent_id": null,
+        "properties": {
+          "Name": "M2",
+          "OS": "linux",
+          "Interfaces": "1",
+          "Toolkit": "lean"
+        },
+        "static_ips": {},
+        "size": 1,
+        "w": 0.0,
+        "h": 0.0,
+        "slot": "",
+        "slot_source": ""
+      },
+      {
+        "id": "host-6",
+        "type_key": "host",
+        "name": "NM",
+        "x": 606.0,
+        "y": 141.0,
+        "parent_id": null,
+        "properties": {
+          "Name": "NM",
+          "OS": "linux",
+          "Interfaces": "1",
+          "Toolkit": "lean"
+        },
+        "static_ips": {},
+        "size": 1,
+        "w": 0.0,
+        "h": 0.0,
+        "slot": "",
+        "slot_source": ""
+      },
+      {
+        "id": "host-12",
+        "type_key": "host",
+        "name": "Sender",
+        "x": -229.0,
+        "y": -7.0,
+        "parent_id": null,
+        "properties": {
+          "Name": "Sender",
+          "OS": "linux",
+          "Interfaces": "1",
+          "Toolkit": "lean"
+        },
+        "static_ips": {},
+        "size": 1,
+        "w": 0.0,
+        "h": 0.0,
+        "slot": "",
+        "slot_source": ""
+      }
+    ],
+    "links": [
+      {
+        "id": "link-7",
+        "source_id": "router-1",
+        "target_id": "switch-2",
+        "label": "",
+        "kind": "link"
+      },
+      {
+        "id": "link-8",
+        "source_id": "router-1",
+        "target_id": "switch-3",
+        "label": "",
+        "kind": "link"
+      },
+      {
+        "id": "link-9",
+        "source_id": "switch-3",
+        "target_id": "host-4",
+        "label": "",
+        "kind": "link"
+      },
+      {
+        "id": "link-10",
+        "source_id": "switch-3",
+        "target_id": "host-5",
+        "label": "",
+        "kind": "link"
+      },
+      {
+        "id": "link-11",
+        "source_id": "switch-3",
+        "target_id": "host-6",
+        "label": "",
+        "kind": "link"
+      },
+      {
+        "id": "link-13",
+        "source_id": "host-12",
+        "target_id": "switch-2",
+        "label": "",
+        "kind": "link"
+      }
+    ]
+  }
+}
