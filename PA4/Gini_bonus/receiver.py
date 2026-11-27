@@ -21,6 +21,7 @@ HEADER = struct.Struct("!4s16sQQ32sB")
 
 
 def parse_packet(packet):
+    # 检查包头和分块长度
     if len(packet) < HEADER.size:
         return None
     magic, transfer_id, size, index, checksum, name_length = HEADER.unpack_from(packet)
@@ -35,6 +36,7 @@ def parse_packet(packet):
         name = packet[HEADER.size:name_end].decode("utf-8")
     except UnicodeDecodeError:
         return None
+    # 拒绝带路径的文件名
     if name in (".", "..") or any(c in name for c in "/\\:\x00"):
         return None
     return transfer_id, (name, size, checksum, count), index, packet[name_end:]
@@ -45,17 +47,20 @@ class Transfer:
         self.metadata = metadata
         self.name, self.size, self.checksum, self.count = metadata
         self.destination = output_dir / self.name
+        # 用临时文件重组
         self.file = NamedTemporaryFile(mode="w+b", dir=output_dir, suffix=".part", delete=False)
         self.partial_path = Path(self.file.name)
         self.chunks = set()
 
     def add(self, index, data):
+        # 去重，按块编号写入
         if index not in self.chunks:
             self.file.seek(index * CHUNK_SIZE)
             self.file.write(data)
             self.chunks.add(index)
 
     def verify_and_save(self):
+        # 重算整文件哈希
         self.file.seek(0)
         digest = hashlib.sha256()
         for block in iter(lambda: self.file.read(64 * 1024), b""):
@@ -67,6 +72,7 @@ class Transfer:
         if digest.digest() != self.checksum:
             print(f"Checksum failed for {self.name!r}. Waiting for another round.")
             return False
+        # 通过校验才保存成品
         os.replace(self.partial_path, self.destination)
         print(f"Verified {self.destination} ({self.size} bytes, {self.count} chunks)")
         return True
@@ -92,6 +98,7 @@ def receive_files(args):
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1024 * 1024)
         sock.bind(("", args.port))
+        # 在指定接口加入组播
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
         print(f"Joined {group}:{args.port} on {interface}")
 
@@ -102,12 +109,14 @@ def receive_files(args):
                 if parsed is None:
                     continue
                 transfer_id, metadata, index, data = parsed
+                # 区分不同传输
                 key = (source, transfer_id)
                 valid_packets += 1
                 now = time.monotonic()
                 if now - last_report >= 2:
                     print(f"Still receiving on {interface}. Valid packets: {valid_packets}")
                     last_report = now
+                # 跳过已完成的传输
                 if key in completed:
                     continue
 
@@ -121,6 +130,7 @@ def receive_files(args):
                 if transfer.metadata != metadata:
                     continue
                 transfer.add(index, data)
+                # 收齐才验整文件
                 if len(transfer.chunks) == transfer.count:
                     verified = transfer.verify_and_save()
                     transfer.close()
@@ -132,6 +142,7 @@ def receive_files(args):
         except KeyboardInterrupt:
             print("Receiver stopped")
         finally:
+            # 退出组播，清理残块
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_DROP_MEMBERSHIP, membership)
             print(f"Left {group} on {interface}. Valid packets received: {valid_packets}")
             for transfer in active.values():

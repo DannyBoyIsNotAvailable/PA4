@@ -30,9 +30,11 @@ def send_file(args):
     if not group.is_multicast:
         raise ValueError("--group must be an IPv4 multicast address")
     destination = (str(group), args.port)
+    # 本次传输 ID，各轮复用
     transfer_id = uuid.uuid4().bytes
 
     with args.file.open("rb") as source, socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        # 先算整文件哈希
         digest = hashlib.sha256()
         size = 0
         for block in iter(lambda: source.read(64 * 1024), b""):
@@ -41,12 +43,14 @@ def send_file(args):
         checksum = digest.digest()
         count = max(1, (size + CHUNK_SIZE - 1) // CHUNK_SIZE)
 
+        # 指定组播出口
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, interface.packed)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 8)
         print(f"Sending {args.file.name!r} ({size} bytes, {count} chunks) to {group}:{args.port}")
         print(f"SHA-256 {digest.hexdigest()}")
 
         round_number = 0
+        # 按轮重发，供迟加入补块
         while args.rounds == 0 or round_number < args.rounds:
             source.seek(0)
             for index in range(count):
@@ -54,8 +58,10 @@ def send_file(args):
                 expected = min(CHUNK_SIZE, size - index * CHUNK_SIZE)
                 if len(data) != expected:
                     raise OSError("source file size changed during transfer")
+                # 包头 + 文件名 + 数据块
                 header = HEADER.pack(MAGIC, transfer_id, size, index, checksum, len(name))
                 sock.sendto(header + name + data, destination)
+                # 控制发包间隔
                 if args.delay:
                     time.sleep(args.delay)
             if source.read(1):
